@@ -225,7 +225,7 @@ def make(parser):
         metavar='HOST[:NAME]',
         nargs='*',
         type=colon_separated,
-        help='host (and optionally the daemon name) to deploy on',
+        help='host to deploy on (and optionally the MDS name)',
         )
     parser.set_defaults(
         func=mds,

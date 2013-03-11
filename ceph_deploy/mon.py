@@ -13,20 +13,18 @@ from .cliutil import priority
 log = logging.getLogger(__name__)
 
 
-def create_mon(cluster, monitor_keyring, init):
+def create_mon(name, cluster, monitor_keyring, init):
     import os
-    import socket
     import subprocess
 
-    hostname = socket.gethostname()
-    path = '/var/lib/ceph/mon/ceph-{hostname}'.format(
-        hostname=hostname,
+    path = '/var/lib/ceph/mon/ceph-{name}'.format(
+        name=name,
         )
-    done_path = '/var/lib/ceph/mon/ceph-{hostname}/done'.format(
-        hostname=hostname,
+    done_path = '/var/lib/ceph/mon/ceph-{name}/done'.format(
+        name=name,
         )
-    init_path = '/var/lib/ceph/mon/ceph-{hostname}/{init}'.format(
-        hostname=hostname,
+    init_path = '/var/lib/ceph/mon/ceph-{name}/{init}'.format(
+        name=name,
         init=init,
         )
 
@@ -34,9 +32,9 @@ def create_mon(cluster, monitor_keyring, init):
         os.mkdir(path)
 
     if not os.path.exists(done_path):
-        keyring = '/var/lib/ceph/tmp/{cluster}-{hostname}.mon.keyring'.format(
+        keyring = '/var/lib/ceph/tmp/{cluster}-{name}.mon.keyring'.format(
             cluster=cluster,
-            hostname=hostname,
+            name=name,
             )
 
         with file(keyring, 'w') as f:
@@ -47,7 +45,7 @@ def create_mon(cluster, monitor_keyring, init):
                 'ceph-mon',
                 '--cluster', cluster,
                 '--mkfs',
-                '-i', hostname,
+                '-i', name,
                 '--keyring', keyring,
                 ],
             )
@@ -66,7 +64,7 @@ def create_mon(cluster, monitor_keyring, init):
                 'emit',
                 'ceph-mon',
                 'cluster={cluster}'.format(cluster=cluster),
-                'id={hostname}'.format(hostname=hostname),
+                'id={name}'.format(name=name),
                 ],
             )
     elif init == 'sysvinit':
@@ -75,7 +73,7 @@ def create_mon(cluster, monitor_keyring, init):
                 'service',
                 'ceph',
                 'start',
-                'mon.{hostname}'.format(hostname=hostname),
+                'mon.{name}'.format(name=name),
                 ],
             )
 
@@ -108,9 +106,9 @@ def mon_create(args):
         )
 
     errors = 0
-    for hostname in args.mon:
+    for hostname, name in args.mon:
         try:
-            log.debug('Deploying mon to %s', hostname)
+            log.debug('Deploying mon.%s to %s', name, hostname)
 
             # TODO username
             sudo = args.pushy('ssh+sudo:{hostname}'.format(hostname=hostname))
@@ -132,6 +130,7 @@ def mon_create(args):
 
             create_mon_r = sudo.compile(create_mon)
             create_mon_r(
+                name=name,
                 cluster=args.cluster,
                 monitor_keyring=monitor_keyring,
                 init=init,
@@ -152,6 +151,15 @@ def mon(args):
     else:
         log.error('subcommand %s not implemented', args.subcommand)
 
+
+def colon_separated(s):
+    name = None
+    if s.count(':') == 1:
+        (host, name) = s.split(':')
+    else:
+        name = host
+    return (host, name)
+
 @priority(30)
 def make(parser):
     """
@@ -168,9 +176,10 @@ def make(parser):
         )
     parser.add_argument(
         'mon',
-        metavar='HOST',
+        metavar='HOST[:NAME]',
         nargs='*',
-        help='host to deploy on',
+        help='host to deploy on (and optionally the monitor name)',
+        type=colon_separated,
         )
     parser.set_defaults(
         func=mon,
